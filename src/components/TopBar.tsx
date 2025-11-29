@@ -12,6 +12,7 @@ export default function TopBar() {
     );
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderBottom: '1px solid #eee' }}>
+            {tab('/banners', 'Banners')}
             {tab('/subjects', 'Subjects')}
             {tab('/units', 'Units')}
             {tab('/pyq_mcq', 'PYQMCQ')}

@@ -10,15 +10,17 @@ import MockTestPapers from './pages/MockTestPage';
 import NewsPage from './pages/NewsPage';           // <-- add
 import PYQExamPapersPDF from './pages/PYQExamPapers';
 import PYQMCQ from './pages/PYQMCQ';
+import Banners from './pages/BannersPages';
 
 export default function App() {
   return (
     <AuthGate>
       <TopBar />
       <Routes>
+        <Route path="/banners" element={<Banners />} />
         <Route path="/subjects" element={<SubjectsPage />} />
         <Route path="/units" element={<UnitsPage />} />
-        <Route path="/pyq_mcq" element={<PYQMCQ/>} />
+        <Route path="/pyq_mcq" element={<PYQMCQ />} />
         <Route path="pyqmcqpapers" element={<PYQMcqPapersPage />} />
         <Route path="/pyqexampaperspdf" element={<PYQExamPapersPDF />} />
         <Route path="/mocktestpapers" element={<MockTestPapers />} />

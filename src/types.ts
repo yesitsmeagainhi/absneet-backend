@@ -1,6 +1,7 @@
 export type Video = { id: string; title: string; url: string };
 export type Pdf = { id: string; title: string; url: string };
 export type Question = { id: string; q: string; options: string[]; correctIndex: number; explanation: string };
+import type { Timestamp } from 'firebase/firestore';
 
 
 export type SubjectDoc = {
@@ -45,7 +46,15 @@ export type PYQMCQ = {
 
 }
 // src/types.ts
-
+export type BannerDoc = {
+    id: string;
+    title: string;
+    imageUrl: string;
+    link: string;
+    order: number;
+    active: boolean;
+    createdAt?: Timestamp | null;
+};
 export type FullExamPdfDoc = {
     id: string;
     exam: string;
