@@ -22,7 +22,7 @@ type PYQPaper = {
     questions: Question[];
 };
 
-const col = collection(db, 'pyqMcqPapers');
+const col = collection(db, 'nodes');
 
 export default function PYQMcqPapersPage() {
     const [papers, setPapers] = useState<PYQPaper[]>([]);
@@ -119,7 +119,7 @@ export default function PYQMcqPapersPage() {
 
         if (editingId) {
             // 🔄 UPDATE existing document
-            await updateDoc(doc(db, 'pyqMcqPapers', editingId), {
+            await updateDoc(doc(db, 'nodes', editingId), {
                 ...payload,
                 updatedAt: serverTimestamp(),
             });
@@ -138,7 +138,7 @@ export default function PYQMcqPapersPage() {
     const removePaper = async (id?: string) => {
         if (!id) return;
         if (!window.confirm('Delete this PYQ paper?')) return;
-        await deleteDoc(doc(db, 'pyqMcqPapers', id));
+        await deleteDoc(doc(db, 'nodes', id));
         // If you deleted the one you were editing → reset form
         if (editingId === id) resetForm();
         await loadPapers();

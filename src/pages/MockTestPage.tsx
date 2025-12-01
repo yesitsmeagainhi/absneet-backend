@@ -18,8 +18,8 @@ import type {
 
 type Tab = 'full' | 'subject';
 
-const fullExamCol = collection(db, 'mock_full_exam_papers');
-const subjectMocksCol = collection(db, 'mock_subject_mock_papers');
+const fullExamCol = collection(db, 'nodes');
+const subjectMocksCol = collection(db, 'nodes');
 
 const ACCENT = '#2563EB';
 

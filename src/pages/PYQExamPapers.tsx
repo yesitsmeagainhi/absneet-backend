@@ -77,9 +77,17 @@ export default function PYQFullExamPdfPapersPage() {
     const removePaper = async (id?: string) => {
         if (!id) return;
         if (!window.confirm('Delete this full exam paper PDF?')) return;
-        await deleteDoc(doc(db, 'pyqFullExamPapers', id));
-        await loadPapers();
+
+        try {
+            // 🔥 delete from the same collection where you added & loaded docs
+            await deleteDoc(doc(db, 'nodes', id));
+            await loadPapers();
+        } catch (err) {
+            console.error('Failed to delete paper', err);
+            alert('Failed to delete. Please check console / Firestore rules.');
+        }
     };
+
 
     return (
         <div style={{ padding: 16 }}>
