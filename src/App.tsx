@@ -11,6 +11,7 @@ import NewsPage from './pages/NewsPage';           // <-- add
 import PYQExamPapersPDF from './pages/PYQExamPapers';
 import PYQMCQ from './pages/PYQMCQ';
 import Banners from './pages/BannersPages';
+import ContactPanel from './pages/ContactPanel';
 
 export default function App() {
   return (
@@ -25,7 +26,10 @@ export default function App() {
         <Route path="/pyqexampaperspdf" element={<PYQExamPapersPDF />} />
         <Route path="/mocktestpapers" element={<MockTestPapers />} />
         <Route path="/chapters" element={<ChaptersPage />} />
-        <Route path="/news" element={<NewsPage />} />  {/* <-- add */}
+        <Route path="/news" element={<NewsPage />} />
+        <Route path="/contactInfo" element={<ContactPanel />} />
+
+        {/* <-- add */}
         <Route path="*" element={<Navigate to="/subjects" />} />
       </Routes>
     </AuthGate>

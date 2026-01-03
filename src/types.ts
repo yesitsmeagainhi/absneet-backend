@@ -45,6 +45,16 @@ export type PYQMCQ = {
     createdAt?: any;
 
 }
+export type ContactDoc = {
+    type?: 'contact';
+    supportPhone: string;
+    whatsappPhone: string;
+    supportEmail: string;
+    officeAddress: string;
+    officeHours: string;
+    mapsQueryOverride: string;
+};
+
 // src/types.ts
 export type BannerDoc = {
     id: string;

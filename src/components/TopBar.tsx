@@ -21,6 +21,7 @@ export default function TopBar() {
             {tab('/mocktestpapers', 'MockTestPage')}
             {tab('/chapters', 'Chapters')}
             {tab('/news', 'News')} {/* <-- new */}
+            {tab('/contactInfo', 'ContactInfo')}
             <div style={{ flex: 1 }} />
             <button onClick={() => signOut(auth)}>Sign out</button>
         </div>
