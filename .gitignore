@@ -22,3 +22,22 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# env files
+.env.local
+.env.* 
+!.env.example
+
+# firebase / google config
+src/google-services.json
+
+# dependencies & build output
+node_modules/
+dist/
+.vite/
+
+# logs
+*.log
+
+#Sample files
+sample_*.xlsx
+sample_*.csv
