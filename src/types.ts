@@ -1,6 +1,15 @@
 export type Video = { id: string; title: string; url: string };
 export type Pdf = { id: string; title: string; url: string };
-export type Question = { id: string; q: string; options: string[]; correctIndex: number; explanation: string };
+export type Question = {
+    id: string;
+    q: string;
+    qImage?: string;           // Optional question image URL
+    options: string[];
+    optionImages?: string[];   // Optional image URLs for options (for image-based answers)
+    correctIndex: number;
+    explanation: string;
+    explanationImage?: string; // Optional explanation diagram/image
+};
 import type { Timestamp } from 'firebase/firestore';
 
 

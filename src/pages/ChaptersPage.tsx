@@ -491,7 +491,8 @@ import type {
     Pdf,
     Question,
 } from '../types';
-import * as XLSX from 'xlsx'; // 👈 NEW
+import * as XLSX from 'xlsx';
+import ImageUploader from '../components/ImageUploader';
 
 const col = collection(db, 'nodes');
 
@@ -521,6 +522,9 @@ export default function ChaptersPage() {
     const [videos, setVideos] = useState<Video[]>([]);
     const [pdfs, setPdfs] = useState<Pdf[]>([]);
     const [questions, setQuestions] = useState<Question[]>([]);
+
+    // 🔹 Edit state
+    const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
 
     // 🔹 Import state
     const [importing, setImporting] = useState(false);
@@ -740,12 +744,23 @@ export default function ChaptersPage() {
 
                     const explanation = String(row['Explanation'] || '').trim();
 
+                    // Image fields from Excel
+                    const qImage = String(row['QuestionImage'] || row['QImage'] || '').trim();
+                    const optionAImage = String(row['OptionAImage'] || row['Option1Image'] || '').trim();
+                    const optionBImage = String(row['OptionBImage'] || row['Option2Image'] || '').trim();
+                    const optionCImage = String(row['OptionCImage'] || row['Option3Image'] || '').trim();
+                    const optionDImage = String(row['OptionDImage'] || row['Option4Image'] || '').trim();
+                    const explanationImage = String(row['ExplanationImage'] || '').trim();
+
                     agg.questions.push({
                         id: crypto.randomUUID(),
                         q: questionText,
+                        qImage,
                         options,
+                        optionImages: [optionAImage, optionBImage, optionCImage, optionDImage],
                         correctIndex,
                         explanation,
+                        explanationImage,
                     } as Question);
                 }
             });
@@ -884,12 +899,49 @@ export default function ChaptersPage() {
 
         await addDoc(col, chapterData);
 
+        clearForm();
+        await loadChapters(unitId);
+    };
+
+    const updateChapter = async () => {
+        if (!editingChapterId || !name.trim()) return;
+
+        const chapterData: Partial<ChapterDoc> = {
+            name: name.trim(),
+            order: Number(order) || 0,
+            videos,
+            pdfs,
+            questions,
+        };
+
+        await updateDoc(doc(db, 'nodes', editingChapterId), chapterData as any);
+
+        clearForm();
+        await loadChapters(unitId);
+    };
+
+    const startEditChapter = (chapter: ChapterDoc) => {
+        setEditingChapterId(chapter.id!);
+        setName(chapter.name || '');
+        setOrder(chapter.order || 1);
+        setVideos(chapter.videos || []);
+        setPdfs(chapter.pdfs || []);
+        // Ensure questions have all required fields including image fields
+        const loadedQuestions = (chapter.questions || []).map(q => ({
+            ...q,
+            qImage: q.qImage || '',
+            optionImages: q.optionImages || ['', '', '', ''],
+            explanationImage: q.explanationImage || '',
+        }));
+        setQuestions(loadedQuestions);
+    };
+
+    const clearForm = () => {
+        setEditingChapterId(null);
         setName('');
         setVideos([]);
         setPdfs([]);
         setQuestions([]);
-
-        await loadChapters(unitId);
     };
 
     const patchChapter = async (id: string, patch: Partial<ChapterDoc>) => {
@@ -900,6 +952,9 @@ export default function ChaptersPage() {
     const removeChapter = async (id: string) => {
         if (!window.confirm('Delete this chapter?')) return;
         await deleteDoc(doc(db, 'nodes', id));
+        if (editingChapterId === id) {
+            clearForm();
+        }
         await loadChapters();
     };
 
@@ -970,9 +1025,12 @@ export default function ChaptersPage() {
             {
                 id: crypto.randomUUID(),
                 q: '',
-                options: ['', '', ''],
+                qImage: '',
+                options: ['', '', '', ''],
+                optionImages: ['', '', '', ''],
                 correctIndex: 0,
                 explanation: '',
+                explanationImage: '',
             } as Question,
         ]);
 
@@ -999,7 +1057,7 @@ export default function ChaptersPage() {
                         {' '}
                         Subject, SubjectOrder, Unit, UnitOrder, Chapter, ChapterOrder,
                         VideoTitles, VideoUrls, PdfTitles, PdfUrls, Question, Options,
-                        CorrectIndex, Explanation
+                        CorrectIndex, Explanation, QuestionImage, OptionAImage-DImage, ExplanationImage
                     </code>
                 </p>
                 <input
@@ -1138,81 +1196,280 @@ export default function ChaptersPage() {
                         <div
                             key={q.id}
                             style={{
-                                display: 'grid',
-                                gridTemplateColumns: '2fr 3fr 120px 2fr auto',
-                                gap: 6,
-                                marginTop: 6,
+                                marginTop: 12,
+                                padding: 12,
+                                border: '1px solid #e5e7eb',
+                                borderRadius: 10,
+                                background: '#fff',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                             }}
                         >
-                            <input
-                                placeholder="Question"
-                                value={q.q}
-                                onChange={e => {
-                                    const arr = [...questions];
-                                    arr[i] = { ...arr[i], q: e.target.value };
-                                    setQuestions(arr);
-                                }}
-                            />
-                            <input
-                                placeholder="Options A|B|C|D"
-                                value={q.options.join('|')}
-                                onChange={e => {
-                                    const arr = [...questions];
-                                    arr[i] = {
-                                        ...arr[i],
-                                        options: e.target.value.split('|'),
-                                    };
-                                    setQuestions(arr);
-                                }}
-                            />
-                            <input
-                                type="number"
-                                placeholder="Correct index"
-                                value={q.correctIndex}
-                                onChange={e => {
-                                    const arr = [...questions];
-                                    arr[i] = {
-                                        ...arr[i],
-                                        correctIndex: Number(e.target.value) || 0,
-                                    };
-                                    setQuestions(arr);
-                                }}
-                            />
-                            <input
-                                placeholder="Explanation (why this is correct)"
-                                value={q.explanation ?? ''}
-                                onChange={e => {
-                                    const arr = [...questions];
-                                    arr[i] = {
-                                        ...arr[i],
-                                        explanation: e.target.value,
-                                    };
-                                    setQuestions(arr);
-                                }}
-                            />
-                            <button
-                                onClick={() => {
-                                    const arr = [...questions];
-                                    arr.splice(i, 1);
-                                    setQuestions(arr);
+                            {/* Header */}
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: 10,
+                                    paddingBottom: 8,
+                                    borderBottom: '1px solid #e5e7eb',
                                 }}
                             >
-                                ✕
-                            </button>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Q{i + 1}</span>
+                                <button
+                                    onClick={() => {
+                                        const arr = [...questions];
+                                        arr.splice(i, 1);
+                                        setQuestions(arr);
+                                    }}
+                                    style={{ color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12 }}
+                                >
+                                    Delete
+                                </button>
+                            </div>
+
+                            {/* SECTION 1: Question Text */}
+                            <div style={{ marginBottom: 12, padding: 10, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd' }}>
+                                <label style={{ fontSize: 11, color: '#0369a1', display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                                    Question Text
+                                </label>
+                                <textarea
+                                    placeholder="Enter the question text here..."
+                                    value={q.q}
+                                    onChange={e => {
+                                        const arr = [...questions];
+                                        arr[i] = { ...arr[i], q: e.target.value };
+                                        setQuestions(arr);
+                                    }}
+                                    rows={2}
+                                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, resize: 'vertical' }}
+                                />
+                                {/* Question Image */}
+                                <div style={{ marginTop: 8 }}>
+                                    <ImageUploader
+                                        label="Question Image (optional - for diagrams/figures)"
+                                        value={q.qImage || ''}
+                                        onChange={(url) => {
+                                            const arr = [...questions];
+                                            arr[i] = { ...arr[i], qImage: url };
+                                            setQuestions(arr);
+                                        }}
+                                        folder="questions"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SECTION 2: Answer Options */}
+                            <div style={{ marginBottom: 12, padding: 10, background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+                                <label style={{ fontSize: 11, color: '#15803d', display: 'block', marginBottom: 8, fontWeight: 600 }}>
+                                    Answer Options (select the correct one)
+                                </label>
+
+                                {/* Text Options with Radio Buttons */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                                    {[0, 1, 2, 3].map((optIdx) => (
+                                        <label
+                                            key={optIdx}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 8,
+                                                padding: '8px 10px',
+                                                background: q.correctIndex === optIdx ? '#dcfce7' : '#fff',
+                                                borderRadius: 6,
+                                                border: q.correctIndex === optIdx ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={`correct_chapter_${q.id}`}
+                                                checked={q.correctIndex === optIdx}
+                                                onChange={() => {
+                                                    const arr = [...questions];
+                                                    arr[i] = { ...arr[i], correctIndex: optIdx };
+                                                    setQuestions(arr);
+                                                }}
+                                                style={{ accentColor: '#22c55e' }}
+                                            />
+                                            <span style={{ color: '#6b7280', fontSize: 12, minWidth: 20, fontWeight: 600 }}>
+                                                {String.fromCharCode(65 + optIdx)}.
+                                            </span>
+                                            <input
+                                                value={(q.options || ['', '', '', ''])[optIdx] || ''}
+                                                onChange={e => {
+                                                    const arr = [...questions];
+                                                    const opts = [...(arr[i].options || ['', '', '', ''])];
+                                                    opts[optIdx] = e.target.value;
+                                                    arr[i] = { ...arr[i], options: opts };
+                                                    setQuestions(arr);
+                                                }}
+                                                placeholder={`Option ${String.fromCharCode(65 + optIdx)} text`}
+                                                style={{ flex: 1, padding: '4px 8px', borderRadius: 4, border: '1px solid #e5e7eb', fontSize: 12 }}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+
+                                {/* Image Options (collapsible) */}
+                                <details>
+                                    <summary style={{
+                                        fontSize: 11,
+                                        color: '#d97706',
+                                        cursor: 'pointer',
+                                        padding: '6px 10px',
+                                        background: '#fffbeb',
+                                        borderRadius: 6,
+                                        border: '1px dashed #fbbf24',
+                                    }}>
+                                        Image Options (only if answers are images instead of text)
+                                    </summary>
+                                    <div style={{ marginTop: 8, padding: 10, background: '#fffbeb', borderRadius: 6, border: '1px solid #fbbf24' }}>
+                                        <p style={{ fontSize: 10, color: '#b45309', marginBottom: 8 }}>
+                                            Use this ONLY when answer choices are images (diagrams, graphs) instead of text.
+                                        </p>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            {[0, 1, 2, 3].map((optIdx) => (
+                                                <div key={optIdx} style={{
+                                                    padding: 8,
+                                                    background: '#fff',
+                                                    borderRadius: 6,
+                                                    border: q.correctIndex === optIdx ? '2px solid #22c55e' : '1px solid #e5e7eb',
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                                        <input
+                                                            type="radio"
+                                                            name={`correct_img_chapter_${q.id}`}
+                                                            checked={q.correctIndex === optIdx}
+                                                            onChange={() => {
+                                                                const arr = [...questions];
+                                                                arr[i] = { ...arr[i], correctIndex: optIdx };
+                                                                setQuestions(arr);
+                                                            }}
+                                                            style={{ accentColor: '#22c55e' }}
+                                                        />
+                                                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>
+                                                            Option {String.fromCharCode(65 + optIdx)}
+                                                        </span>
+                                                        {q.correctIndex === optIdx && (
+                                                            <span style={{ fontSize: 9, color: '#22c55e', marginLeft: 'auto', fontWeight: 600 }}>CORRECT</span>
+                                                        )}
+                                                    </div>
+                                                    <ImageUploader
+                                                        value={(q.optionImages || [])[optIdx] || ''}
+                                                        onChange={(url) => {
+                                                            const arr = [...questions];
+                                                            const optImgs = [...(arr[i].optionImages || ['', '', '', ''])];
+                                                            optImgs[optIdx] = url;
+                                                            arr[i] = { ...arr[i], optionImages: optImgs };
+                                                            setQuestions(arr);
+                                                        }}
+                                                        folder="questions/options"
+                                                        placeholder="Paste image URL or upload..."
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+
+                            {/* SECTION 3: Explanation */}
+                            <div style={{ padding: 10, background: '#faf5ff', borderRadius: 8, border: '1px solid #e9d5ff' }}>
+                                <label style={{ fontSize: 11, color: '#7c3aed', display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                                    Explanation (shown after wrong answer)
+                                </label>
+                                <textarea
+                                    placeholder="Explain why the correct option is right..."
+                                    value={q.explanation ?? ''}
+                                    onChange={e => {
+                                        const arr = [...questions];
+                                        arr[i] = { ...arr[i], explanation: e.target.value };
+                                        setQuestions(arr);
+                                    }}
+                                    rows={2}
+                                    style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, resize: 'vertical' }}
+                                />
+                                {/* Explanation Image */}
+                                <div style={{ marginTop: 8 }}>
+                                    <ImageUploader
+                                        label="Explanation Image (optional - for solution diagrams)"
+                                        value={q.explanationImage || ''}
+                                        onChange={(url) => {
+                                            const arr = [...questions];
+                                            arr[i] = { ...arr[i], explanationImage: url };
+                                            setQuestions(arr);
+                                        }}
+                                        folder="questions/explanations"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ))}
                 </div>
             </div>
 
-            <button onClick={addChapter} disabled={!subjectId || !unitId || !name.trim()}>
-                Add Chapter
-            </button>
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16 }}>
+                {editingChapterId ? (
+                    <>
+                        <button
+                            onClick={updateChapter}
+                            disabled={!name.trim()}
+                            style={{
+                                background: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '10px 20px',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                            }}
+                        >
+                            Update Chapter
+                        </button>
+                        <button
+                            onClick={clearForm}
+                            style={{
+                                background: '#f3f4f6',
+                                color: '#374151',
+                                border: '1px solid #d1d5db',
+                                padding: '10px 20px',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Cancel Edit
+                        </button>
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>
+                            Editing: <strong>{name || '(unnamed)'}</strong>
+                        </span>
+                    </>
+                ) : (
+                    <button
+                        onClick={addChapter}
+                        disabled={!subjectId || !unitId || !name.trim()}
+                        style={{
+                            background: '#16a34a',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '10px 20px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            opacity: (!subjectId || !unitId || !name.trim()) ? 0.5 : 1,
+                        }}
+                    >
+                        + Add Chapter
+                    </button>
+                )}
+            </div>
 
             <hr style={{ margin: '24px 0' }} />
             <h3>Existing chapters</h3>
             <table width="100%" cellPadding={8} style={{ borderCollapse: 'collapse' }}>
                 <thead>
-                    <tr>
+                    <tr style={{ background: '#f9fafb' }}>
                         <th align="left">Chapter</th>
                         <th>Order</th>
                         <th>Videos</th>
@@ -1223,8 +1480,21 @@ export default function ChaptersPage() {
                 </thead>
                 <tbody>
                     {chapters.map(c => (
-                        <tr key={c.id} style={{ borderTop: '1px solid #eee' }}>
-                            <td>{c.name}</td>
+                        <tr
+                            key={c.id}
+                            style={{
+                                borderTop: '1px solid #eee',
+                                background: editingChapterId === c.id ? '#eff6ff' : 'transparent',
+                            }}
+                        >
+                            <td style={{ fontWeight: editingChapterId === c.id ? 600 : 400 }}>
+                                {c.name}
+                                {editingChapterId === c.id && (
+                                    <span style={{ marginLeft: 8, fontSize: 10, color: '#2563eb', background: '#dbeafe', padding: '2px 6px', borderRadius: 4 }}>
+                                        EDITING
+                                    </span>
+                                )}
+                            </td>
                             <td>
                                 <input
                                     type="number"
@@ -1240,10 +1510,32 @@ export default function ChaptersPage() {
                             <td>{c.videos?.length || 0}</td>
                             <td>{c.pdfs?.length || 0}</td>
                             <td>{c.questions?.length || 0}</td>
-                            <td>
+                            <td style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={() => startEditChapter(c)}
+                                    disabled={editingChapterId === c.id}
+                                    style={{
+                                        color: '#2563eb',
+                                        background: '#eff6ff',
+                                        border: '1px solid #bfdbfe',
+                                        padding: '4px 10px',
+                                        borderRadius: 4,
+                                        cursor: editingChapterId === c.id ? 'default' : 'pointer',
+                                        opacity: editingChapterId === c.id ? 0.5 : 1,
+                                    }}
+                                >
+                                    Edit
+                                </button>
                                 <button
                                     onClick={() => removeChapter(c.id!)}
-                                    style={{ color: 'crimson' }}
+                                    style={{
+                                        color: '#dc2626',
+                                        background: '#fef2f2',
+                                        border: '1px solid #fecaca',
+                                        padding: '4px 10px',
+                                        borderRadius: 4,
+                                        cursor: 'pointer',
+                                    }}
                                 >
                                     Delete
                                 </button>

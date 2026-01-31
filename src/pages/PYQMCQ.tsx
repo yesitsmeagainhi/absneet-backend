@@ -742,13 +742,17 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import * as XLSX from 'xlsx';
+import ImageUploader from '../components/ImageUploader';
 
 type Question = {
     id: string;
     q: string;
+    qImage?: string;           // Optional question image URL
     options: string[];
+    optionImages?: string[];   // Optional image URLs for options
     correctIndex: number;
     explanation?: string;
+    explanationImage?: string; // Optional explanation image URL
 };
 
 type PYQPaperDoc = {
@@ -771,9 +775,12 @@ function makeEmptyQuestion(): Question {
     return {
         id: makeQuestionId(),
         q: '',
+        qImage: '',
         options: ['', '', '', ''],
+        optionImages: ['', '', '', ''],
         correctIndex: 0,
         explanation: '',
+        explanationImage: '',
     };
 }
 
@@ -816,12 +823,17 @@ export default function PYQMCQ() {
                 const questions: Question[] = rawQs.map((q: any, idx: number) => ({
                     id: q.id || `${d.id}_${idx}`,
                     q: q.q ?? '',
+                    qImage: q.qImage ?? '',
                     options: Array.isArray(q.options)
                         ? q.options
+                        : ['', '', '', ''],
+                    optionImages: Array.isArray(q.optionImages)
+                        ? q.optionImages
                         : ['', '', '', ''],
                     correctIndex:
                         typeof q.correctIndex === 'number' ? q.correctIndex : 0,
                     explanation: q.explanation ?? '',
+                    explanationImage: q.explanationImage ?? '',
                 }));
 
                 return {
@@ -957,6 +969,26 @@ export default function PYQMCQ() {
         );
     };
 
+    const handleUpdateOptionImage = (
+        qid: string,
+        optIndex: number,
+        value: string,
+    ) => {
+        setCurrent(prev =>
+            prev
+                ? {
+                    ...prev,
+                    questions: prev.questions.map(q => {
+                        if (q.id !== qid) return q;
+                        const copy = [...(q.optionImages || ['', '', '', ''])];
+                        copy[optIndex] = value;
+                        return { ...q, optionImages: copy };
+                    }),
+                }
+                : prev,
+        );
+    };
+
     // Helper to safely read a cell using multiple possible column names
     const getCell = (row: any, keys: string[]): string => {
         for (const k of keys) {
@@ -1074,12 +1106,23 @@ export default function PYQMCQ() {
                     'Solution',
                 ]);
 
+                // Image fields from Excel
+                const qImage = getCell(row, ['QuestionImage', 'QImage', 'qImage']);
+                const optionAImage = getCell(row, ['OptionAImage', 'Option1Image', 'OptAImg']);
+                const optionBImage = getCell(row, ['OptionBImage', 'Option2Image', 'OptBImg']);
+                const optionCImage = getCell(row, ['OptionCImage', 'Option3Image', 'OptCImg']);
+                const optionDImage = getCell(row, ['OptionDImage', 'Option4Image', 'OptDImg']);
+                const explanationImage = getCell(row, ['ExplanationImage', 'ExplainImage', 'SolutionImage']);
+
                 imported.push({
                     id: makeQuestionId(),
                     q: questionText,
+                    qImage,
                     options,
+                    optionImages: [optionAImage, optionBImage, optionCImage, optionDImage],
                     correctIndex,
                     explanation,
+                    explanationImage,
                 });
             });
 
@@ -1138,22 +1181,41 @@ export default function PYQMCQ() {
             setSaving(true);
             setError(null);
 
-            // normalize current questions
-            const normalizedCurrent = current.questions.map(q => ({
-                id: q.id || makeQuestionId(),
-                q: q.q,
-                options:
-                    q.options && q.options.length
-                        ? q.options
-                        : ['', '', '', ''],
-                correctIndex:
-                    typeof q.correctIndex === 'number' &&
-                        q.correctIndex >= 0 &&
-                        q.correctIndex < 4
-                        ? q.correctIndex
-                        : 0,
-                explanation: q.explanation ?? '',
-            }));
+            // normalize current questions - only include image fields if they have actual values
+            const normalizedCurrent: Question[] = current.questions.map(q => {
+                const base: Question = {
+                    id: q.id || makeQuestionId(),
+                    q: q.q,
+                    options: q.options && q.options.length ? q.options : ['', '', '', ''],
+                    correctIndex:
+                        typeof q.correctIndex === 'number' &&
+                            q.correctIndex >= 0 &&
+                            q.correctIndex < 4
+                            ? q.correctIndex
+                            : 0,
+                    explanation: q.explanation ?? '',
+                };
+
+                // Only include qImage if it has a non-empty value
+                if (q.qImage && q.qImage.trim()) {
+                    base.qImage = q.qImage.trim();
+                }
+
+                // Only include optionImages if at least one option has an image
+                const optImgs = q.optionImages || ['', '', '', ''];
+                const hasAnyOptionImage = optImgs.some(img => img && img.trim());
+                if (hasAnyOptionImage) {
+                    // Keep the array structure, trim values
+                    base.optionImages = optImgs.map(img => (img || '').trim());
+                }
+
+                // Only include explanationImage if it has a non-empty value
+                if (q.explanationImage && q.explanationImage.trim()) {
+                    base.explanationImage = q.explanationImage.trim();
+                }
+
+                return base;
+            });
 
             const basePayload = {
                 type: 'pyq_mcq',
@@ -1598,13 +1660,12 @@ export default function PYQMCQ() {
                                     style={{
                                         fontSize: 10,
                                         color: '#9ca3af',
-                                        maxWidth: 320,
+                                        maxWidth: 400,
                                         textAlign: 'right',
                                     }}
                                 >
-                                    Excel columns: Question, OptionA, OptionB, OptionC,
-                                    OptionD, CorrectIndex (1-4) or CorrectOption (A-D),
-                                    Explanation.
+                                    Excel columns: Question, OptionA-D, CorrectIndex (1-4),
+                                    Explanation, QuestionImage, OptionAImage-DImage, ExplanationImage
                                 </span>
                                 {importMessage && (
                                     <span
@@ -1670,121 +1731,214 @@ export default function PYQMCQ() {
                                         </button>
                                     </div>
 
-                                    <textarea
-                                        value={q.q}
-                                        onChange={e =>
-                                            handleUpdateQuestionField(
-                                                q.id,
-                                                'q',
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="Question text"
-                                        rows={2}
-                                        style={{
-                                            width: '100%',
-                                            borderRadius: 8,
-                                            border: '1px solid #1f2937',
-                                            background: '#020617',
-                                            color: '#e5e7eb',
-                                            fontSize: 13,
-                                            padding: '6px 8px',
-                                            marginBottom: 6,
-                                            resize: 'vertical',
-                                        }}
-                                    />
+                                    {/* SECTION 1: Question Text */}
+                                    <div style={{
+                                        marginBottom: 12,
+                                        padding: 10,
+                                        background: '#0f172a',
+                                        borderRadius: 8,
+                                    }}>
+                                        <label style={{ fontSize: 11, color: '#60a5fa', display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                                            Question Text
+                                        </label>
+                                        <textarea
+                                            value={q.q}
+                                            onChange={e =>
+                                                handleUpdateQuestionField(q.id, 'q', e.target.value)
+                                            }
+                                            placeholder="Enter the question text here..."
+                                            rows={2}
+                                            style={{
+                                                width: '100%',
+                                                borderRadius: 6,
+                                                border: '1px solid #1f2937',
+                                                background: '#020617',
+                                                color: '#e5e7eb',
+                                                fontSize: 13,
+                                                padding: '8px 10px',
+                                                resize: 'vertical',
+                                            }}
+                                        />
 
-                                    <div
-                                        style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '1fr 1fr',
-                                            gap: 8,
-                                            marginBottom: 6,
-                                        }}
-                                    >
-                                        {q.options.map((opt, i) => (
-                                            <label
-                                                key={i}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 6,
-                                                    fontSize: 12,
-                                                    color: '#e5e7eb',
-                                                }}
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    name={`correct_${q.id}`}
-                                                    checked={
-                                                        q.correctIndex === i
-                                                    }
-                                                    onChange={() =>
-                                                        handleUpdateQuestionField(
-                                                            q.id,
-                                                            'correctIndex',
-                                                            i,
-                                                        )
-                                                    }
-                                                />
-                                                <input
-                                                    value={opt}
-                                                    onChange={e =>
-                                                        handleUpdateOption(
-                                                            q.id,
-                                                            i,
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder={`Option ${i + 1
-                                                        }`}
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '4px 6px',
-                                                        borderRadius: 6,
-                                                        border: '1px solid #1f2937',
-                                                        background: '#020617',
-                                                        color: '#e5e7eb',
-                                                        fontSize: 12,
-                                                    }}
-                                                />
-                                            </label>
-                                        ))}
+                                        {/* Question Image */}
+                                        <div style={{ marginTop: 8 }}>
+                                            <ImageUploader
+                                                label="Question Image (optional - add diagram/figure for the question)"
+                                                value={q.qImage || ''}
+                                                onChange={(url) =>
+                                                    handleUpdateQuestionField(q.id, 'qImage', url)
+                                                }
+                                                folder="questions"
+                                            />
+                                        </div>
                                     </div>
 
-                                    <label
-                                        style={{
-                                            fontSize: 11,
-                                            color: '#9ca3af',
-                                            display: 'block',
-                                            marginBottom: 2,
-                                        }}
-                                    >
-                                        Explanation (shown in app after a
-                                        wrong answer)
-                                    </label>
-                                    <textarea
-                                        value={q.explanation || ''}
-                                        onChange={e =>
-                                            handleUpdateQuestionField(
-                                                q.id,
-                                                'explanation',
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="Explain why this option is correct."
-                                        rows={2}
-                                        style={{
-                                            width: '100%',
-                                            borderRadius: 8,
-                                            border: '1px solid #1f2937',
-                                            background: '#020617',
-                                            color: '#e5e7eb',
-                                            fontSize: 12,
-                                            padding: '6px 8px',
-                                            resize: 'vertical',
-                                        }}
-                                    />
+                                    {/* SECTION 2: Answer Options */}
+                                    <div style={{
+                                        marginBottom: 12,
+                                        padding: 10,
+                                        background: '#0f172a',
+                                        borderRadius: 8,
+                                    }}>
+                                        <label style={{ fontSize: 11, color: '#22c55e', display: 'block', marginBottom: 8, fontWeight: 600 }}>
+                                            Answer Options (select the correct one with radio button)
+                                        </label>
+
+                                        {/* Text Options */}
+                                        <div style={{ marginBottom: 10 }}>
+                                            <span style={{ fontSize: 10, color: '#9ca3af', display: 'block', marginBottom: 6 }}>
+                                                Text Options (enter option text like "m/s", "kg", etc.)
+                                            </span>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                                {q.options.map((opt, i) => (
+                                                    <label
+                                                        key={i}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 8,
+                                                            padding: '6px 8px',
+                                                            background: q.correctIndex === i ? '#14532d' : '#020617',
+                                                            borderRadius: 6,
+                                                            border: q.correctIndex === i ? '1px solid #22c55e' : '1px solid #1f2937',
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name={`correct_${q.id}`}
+                                                            checked={q.correctIndex === i}
+                                                            onChange={() =>
+                                                                handleUpdateQuestionField(q.id, 'correctIndex', i)
+                                                            }
+                                                            style={{ accentColor: '#22c55e' }}
+                                                        />
+                                                        <span style={{ color: '#9ca3af', fontSize: 11, minWidth: 20 }}>
+                                                            {String.fromCharCode(65 + i)}.
+                                                        </span>
+                                                        <input
+                                                            value={opt}
+                                                            onChange={e =>
+                                                                handleUpdateOption(q.id, i, e.target.value)
+                                                            }
+                                                            placeholder={`Option ${String.fromCharCode(65 + i)} text`}
+                                                            style={{
+                                                                flex: 1,
+                                                                padding: '4px 8px',
+                                                                borderRadius: 4,
+                                                                border: 'none',
+                                                                background: 'transparent',
+                                                                color: '#e5e7eb',
+                                                                fontSize: 12,
+                                                            }}
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Image Options (collapsible) */}
+                                        <details style={{ marginTop: 8 }}>
+                                            <summary style={{
+                                                fontSize: 10,
+                                                color: '#f59e0b',
+                                                cursor: 'pointer',
+                                                padding: '6px 10px',
+                                                background: '#1c1917',
+                                                borderRadius: 6,
+                                                border: '1px dashed #78350f',
+                                            }}>
+                                                Image Options (only if answers are images instead of text)
+                                            </summary>
+                                            <div style={{
+                                                marginTop: 8,
+                                                padding: 10,
+                                                background: '#1c1917',
+                                                borderRadius: 6,
+                                                border: '1px solid #78350f',
+                                            }}>
+                                                <p style={{ fontSize: 10, color: '#fbbf24', marginBottom: 8 }}>
+                                                    Use this section ONLY when answer choices are images (diagrams, graphs, etc.) instead of text.
+                                                </p>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                                    {[0, 1, 2, 3].map((i) => (
+                                                        <div key={i} style={{
+                                                            padding: 8,
+                                                            background: '#020617',
+                                                            borderRadius: 6,
+                                                            border: q.correctIndex === i ? '2px solid #22c55e' : '1px solid #374151',
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                                                                <input
+                                                                    type="radio"
+                                                                    name={`correct_img_${q.id}`}
+                                                                    checked={q.correctIndex === i}
+                                                                    onChange={() =>
+                                                                        handleUpdateQuestionField(q.id, 'correctIndex', i)
+                                                                    }
+                                                                    style={{ accentColor: '#22c55e' }}
+                                                                />
+                                                                <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>
+                                                                    Option {String.fromCharCode(65 + i)}
+                                                                </span>
+                                                                {q.correctIndex === i && (
+                                                                    <span style={{ fontSize: 9, color: '#22c55e', marginLeft: 'auto' }}>CORRECT</span>
+                                                                )}
+                                                            </div>
+                                                            <ImageUploader
+                                                                value={(q.optionImages || [])[i] || ''}
+                                                                onChange={(url) =>
+                                                                    handleUpdateOptionImage(q.id, i, url)
+                                                                }
+                                                                folder="questions/options"
+                                                                placeholder="Paste image URL or upload..."
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
+
+                                    {/* SECTION 3: Explanation */}
+                                    <div style={{
+                                        padding: 10,
+                                        background: '#0f172a',
+                                        borderRadius: 8,
+                                    }}>
+                                        <label style={{ fontSize: 11, color: '#a78bfa', display: 'block', marginBottom: 4, fontWeight: 600 }}>
+                                            Explanation (shown after wrong answer)
+                                        </label>
+                                        <textarea
+                                            value={q.explanation || ''}
+                                            onChange={e =>
+                                                handleUpdateQuestionField(q.id, 'explanation', e.target.value)
+                                            }
+                                            placeholder="Explain why the correct option is right..."
+                                            rows={2}
+                                            style={{
+                                                width: '100%',
+                                                borderRadius: 6,
+                                                border: '1px solid #1f2937',
+                                                background: '#020617',
+                                                color: '#e5e7eb',
+                                                fontSize: 12,
+                                                padding: '8px 10px',
+                                                resize: 'vertical',
+                                            }}
+                                        />
+
+                                        {/* Explanation Image */}
+                                        <div style={{ marginTop: 8 }}>
+                                            <ImageUploader
+                                                label="Explanation Image (optional - add solution diagram)"
+                                                value={q.explanationImage || ''}
+                                                onChange={(url) =>
+                                                    handleUpdateQuestionField(q.id, 'explanationImage', url)
+                                                }
+                                                folder="questions/explanations"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>

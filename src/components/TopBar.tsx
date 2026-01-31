@@ -20,8 +20,9 @@ export default function TopBar() {
             {tab('/pyqexampaperspdf', 'PYQExamPapersPDF')}
             {tab('/mocktestpapers', 'MockTestPage')}
             {tab('/chapters', 'Chapters')}
-            {tab('/news', 'News')} {/* <-- new */}
+            {tab('/news', 'News')}
             {tab('/contactInfo', 'ContactInfo')}
+            {tab('/notifications', 'Notifications')}
             <div style={{ flex: 1 }} />
             <button onClick={() => signOut(auth)}>Sign out</button>
         </div>

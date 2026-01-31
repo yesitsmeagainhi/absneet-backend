@@ -7,11 +7,12 @@ import UnitsPage from './pages/UnitsPage';
 import PYQMcqPapersPage from './pages/PYQMcqPapersScreen';
 import ChaptersPage from './pages/ChaptersPage';
 import MockTestPapers from './pages/MockTestPage';
-import NewsPage from './pages/NewsPage';           // <-- add
+import NewsPage from './pages/NewsPage';
 import PYQExamPapersPDF from './pages/PYQExamPapers';
 import PYQMCQ from './pages/PYQMCQ';
 import Banners from './pages/BannersPages';
 import ContactPanel from './pages/ContactPanel';
+import NotificationsPage from './pages/NotificationsPage';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/chapters" element={<ChaptersPage />} />
         <Route path="/news" element={<NewsPage />} />
         <Route path="/contactInfo" element={<ContactPanel />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
 
         {/* <-- add */}
         <Route path="*" element={<Navigate to="/subjects" />} />
